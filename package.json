@@ -79,6 +79,14 @@
         "icon": "$(screen-full)"
       }
     ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "local-ai-assistant.expand",
+          "group": "navigation"
+        }
+      ]
+    },
     "viewsContainers": {
       "activitybar": [
         {
