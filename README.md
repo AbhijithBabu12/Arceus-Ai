@@ -1,8 +1,8 @@
-# Arceus - Local AI Coding Assistant ⚡
+# Arceus - Local AI Coding Powerhouse ⚡
 
-Arceus is a powerful, fully local AI coding assistant for VS Code, powered by **Ollama**. It brings state-of-the-art AI pair-programming directly into your editor—**100% privately, offline, with zero subscriptions, and no code ever leaving your machine.**
+Arceus is a premium, fully local AI coding assistant for VS Code, powered by **Ollama**. Positioned as a private, high-performance alternative to **Cursor**, **Codex**, and **Claude Code**, Arceus brings state-of-the-art AI pair-programming directly into your editor—**100% privately, offline, with zero subscriptions, and no code ever leaving your machine.**
 
-Designed with a premium glassmorphic interface inspired by modern AI developers, Arceus lets you run **any Ollama-compatible LLM** that your machine can handle, providing context-aware answers, semantic workspace search, and one-click file creation.
+Featuring a stunning glassmorphic UI, Arceus integrates a powerful local developer workspace engine with advanced semantic search, smart context gathering, and direct, native file-system operations.
 
 ---
 
@@ -33,6 +33,34 @@ In the era of cloud-hosted AI copilots, developers face high subscription costs,
 
 ---
 
+## 🚀 Key Powerhouse Features (Similar to Claude Code & Cursor)
+
+Arceus is not just a standard chatbot; it is a fully integrated IDE environment designed to build, explain, review, and debug complete applications:
+
+### 🛠️ 1. Writing Entire Files & Full Frontends from Scratch
+* **Recursive Folder & File Creation:** Ask Arceus to write a complete application or frontend component. Clicking the native **"Create File"** button automatically resolves the path (e.g. `src/components/Navbar.jsx`), recursively creates any missing directories, writes the fully formatted code, and opens it directly in the editor.
+* **Complete App Bootstrapping:** Generate full HTML, CSS, JavaScript, React, or Python boilerplate files that are syntactically perfect and ready to run.
+
+### 🔍 2. Workspace-Aware Deep Code Explanations
+* **Architectural & Logical Mapping:** Don't just explain lines of code—ask Arceus to map dependencies, trace logical flows, and explain how a specific function interacts with the rest of your local codebase.
+* **Semantic Code Retrieval:** By leveraging vector embeddings, Arceus searches and understands how different parts of your codebase connect.
+
+### 🐞 3. Assisted Interactive Debugging & Patching
+* **Log & Stack Trace Interpreter:** Paste complex error logs or stack traces. Switch the composer behavior to **Debug** mode. Arceus will pinpoint the root cause of the error, explain *why* it occurred, and outline a step-by-step resolution path with ready-to-apply patches.
+* **Smart Selection Replacement:** Select a broken function in your editor, ask Arceus to fix it, and click **"Apply to Editor"** to instantly replace your selected text with the corrected code.
+
+### 🛡️ 4. Code Reviews & Automated Quality Audits
+* **Vulnerability & Risk Analysis:** Switch to **Review** mode to let Arceus inspect your active file for logical errors, memory leaks, performance bottlenecks, and security vulnerabilities.
+* **Missing Test Identification:** Arceus will suggest precise unit tests (Jest, PyTest, mocha, etc.) to cover edge cases, ensuring high code reliability.
+
+### 📂 5. Seamless Multi-File Workspace Mentions (`@`)
+* **Contextual File Injection:** Type `@` inside the composer. Arceus opens an interactive, fast auto-complete dropdown showing files from across your active workspace. Select any file to load its entire content directly into the model's memory for multi-file comparisons and refactoring.
+
+### 🧠 6. DeepSeek Reasoning Blocks (Cognitive Stream Visualization)
+* **Real-time Thought Stream:** When using advanced local reasoning models like `deepseek-r1`, Arceus isolates the model's cognitive process (`<think>` tags) and streams it inside a beautiful, collapsible glass container. This lets you inspect the AI's step-by-step logic before reading the final clean code.
+
+---
+
 ## 🛠️ How It Works Under the Hood
 
 Arceus operates entirely inside your VS Code extension host using two key local engines:
@@ -48,21 +76,6 @@ To answer questions about your entire project, Arceus uses a built-in local vect
 * **Why an Embedding Model is Needed:** Standard search only finds exact keywords. An embedding model converts your code files into multi-dimensional mathematical vectors representing the *meaning* of the code.
 * **The Semantic Store:** Arceus segments your workspace files into semantic chunks and uses `nomic-embed-text` to generate vector representations locally.
 * **Relevant Context Injection:** When you ask a broad question (e.g., *"How do we handle user authentication?"*), Arceus computes the vector of your prompt, finds the most semantically relevant code chunks from across your codebase, and automatically injects them as system context to your model.
-
----
-
-## ✨ Premium Features & Usefulness
-
-* **Native "Create File" Button:** When Arceus generates a block of code, you can click **Create File**. A native VS Code prompt will ask for a relative path/filename (e.g. `src/utils.js`). It recursively builds the directories, writes the code, and immediately opens the file in your active editor!
-* **DeepSeek Reasoning Blocks:** Advanced reasoning models like `deepseek-r1` output their cognitive process. Arceus captures this reasoning, streams it inside a beautiful collapsible glass block, and separates it cleanly from the final code output.
-* **Active File Context:** Arceus automatically reads your active editor file so it always has real-time context on your active workspace cursor.
-* **Dynamic Response Modes:**
-  * `Auto`: Infers what behavior you need based on your prompt.
-  * `Build`: Focuses strictly on implementations, complete code, and patches.
-  * `Debug`: Step-by-step resolution path for errors and log files.
-  * `Review`: Audits code for risks, bugs, and missing tests.
-  * `Explain`: High-level concepts, diagrams, and educational walkthroughs.
-  * `Chat`: Quick, conversational coding chat.
 
 ---
 
