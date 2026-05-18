@@ -1,10 +1,19 @@
 {
   "name": "arceus",
   "displayName": "Arceus",
-  "description": "Local AI coding assistant powered by Ollama",
-  "version": "0.1.1",
+  "description": "A fully local, private AI coding assistant for VS Code powered by Ollama. Features workspace semantic search, smart file mentions, chat modes, and DeepSeek reasoning support.",
+  "version": "0.1.5",
   "publisher": "arceus-ai",
-  "icon": "media/arceus.png",
+  "icon": "media/arceus2.png",
+  "keywords": [
+    "ai",
+    "assistant",
+    "ollama",
+    "local",
+    "coding",
+    "deepseek",
+    "qwen"
+  ],
   "engines": {
     "vscode": "^1.85.0"
   },

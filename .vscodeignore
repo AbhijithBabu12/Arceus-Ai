@@ -1,0 +1,11 @@
+.vscode/**
+.vscode-test/**
+test/**
+node_modules/**
+backend/**
+*.vsix
+*.log
+debug_*.txt
+eslint.config.mjs
+jsconfig.json
+vsc-extension-quickstart.md

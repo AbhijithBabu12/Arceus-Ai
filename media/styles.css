@@ -1,0 +1,36 @@
+/* mic button base */
+.mic-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* recording state */
+.mic-btn.recording {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.7);
+}
+
+/* pulse animation */
+.mic-btn.recording svg {
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+/* Listening animation */
+#input.listening::placeholder {
+  color: #9ca3af;
+  animation: listeningDots 1.5s infinite;
+}
+
+@keyframes listeningDots {
+  0%   { content: "Listening."; }
+  33%  { content: "Listening.."; }
+  66%  { content: "Listening..."; }
+}
