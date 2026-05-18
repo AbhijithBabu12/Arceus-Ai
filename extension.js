@@ -413,6 +413,9 @@ function activate(context) {
                     case "applyCode":
                         await this.applyCode(message.payload?.code || "");
                         break;
+                    case "createFile":
+                        await this.createFileFromCode(message.payload?.code || "");
+                        break;
                     case "listModels":
                         await this.handleListModels(webview, message.requestId);
                         break;
@@ -497,6 +500,44 @@ function activate(context) {
             if (success) {
                 vscode.commands.executeCommand("editor.action.formatDocument");
                 vscode.window.showInformationMessage("Code applied to editor.");
+            }
+        }
+
+        async createFileFromCode(code) {
+            const fileName = await vscode.window.showInputBox({
+                prompt: "Enter the relative path/filename to create (e.g. src/index.js)",
+                placeHolder: "index.js",
+                ignoreFocusOut: true
+            });
+
+            if (!fileName || !fileName.trim()) {
+                return;
+            }
+
+            try {
+                const rootPath = getWorkspaceRoot();
+                if (!rootPath) {
+                    throw new Error("No open workspace found. Please open a folder in VS Code first.");
+                }
+
+                const fullPath = path.join(rootPath, fileName.trim());
+
+                if (!isInsideWorkspace(fullPath)) {
+                    throw new Error("Cannot create files outside the active workspace.");
+                }
+
+                const dir = path.dirname(fullPath);
+                if (!fs.existsSync(dir)) {
+                    fs.mkdirSync(dir, { recursive: true });
+                }
+
+                fs.writeFileSync(fullPath, code, "utf8");
+
+                const doc = await vscode.workspace.openTextDocument(fullPath);
+                await vscode.window.showTextDocument(doc);
+                vscode.window.showInformationMessage(`Successfully created ${fileName}`);
+            } catch (error) {
+                vscode.window.showErrorMessage(`Failed to create file: ${error.message}`);
             }
         }
 

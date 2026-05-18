@@ -453,7 +453,7 @@ function confirmDelete() {
   pendingDeleteId = null;
   elements.confirmOverlay.classList.add("hidden");
 
-  requestExtension("deleteChat", { chatId }, 3000).catch(() => {});
+  requestExtension("deleteChat", { chatId }, 3000).catch(() => { });
 
   state.chats = state.chats.filter((c) => c.id !== chatId);
   if (state.activeChatId === chatId) {
@@ -594,7 +594,7 @@ function renderActiveView() {
   // Toggle topbar content
   elements.topbarHome.classList.toggle("hidden", showThread);
   elements.topbarThread.classList.toggle("hidden", !showThread);
-  
+
   if (showJournal) {
     streamingBodyEl = null;
     return;
@@ -650,22 +650,22 @@ function highlightCompleted(root) {
 /* ── Thinking block parser ───────────── */
 function parseThinkingAndAnswer(text) {
   const t = text.trimStart();
-  
+
   // Find ALL complete <think>...</think> blocks
   const thinkRegex = /<think>([\s\S]*?)<\/think>/g;
   let thinkingParts = [];
   let match;
   let lastEnd = 0;
-  
+
   while ((match = thinkRegex.exec(t)) !== null) {
     thinkingParts.push(match[1].trim());
     lastEnd = match.index + match[0].length;
   }
-  
+
   if (thinkingParts.length > 0) {
     // We found complete thinking blocks
     const answer = t.slice(lastEnd).trim();
-    
+
     // Check if there's another unclosed <think> after the last closed one
     const remaining = t.slice(lastEnd);
     const unclosed = remaining.match(/<think>([\s\S]*)$/);
@@ -673,16 +673,16 @@ function parseThinkingAndAnswer(text) {
       thinkingParts.push(unclosed[1]);
       return { thinking: thinkingParts.join("\n\n"), answer: "", stillThinking: true };
     }
-    
+
     return { thinking: thinkingParts.join("\n\n"), answer, stillThinking: false };
   }
-  
+
   // Check for a single unclosed <think> (still streaming)
   const unclosed = t.match(/^<think>([\s\S]*)$/);
   if (unclosed) {
     return { thinking: unclosed[1], answer: "", stillThinking: true };
   }
-  
+
   // No thinking blocks at all
   return { thinking: null, answer: text, stillThinking: false };
 }
@@ -693,30 +693,30 @@ function extractPhaseStepperHtml(text) {
   const p2 = text.includes("Phase 2: Execution");
   const p3 = text.includes("Phase 3: Reviewing");
   const p4 = text.includes("Phase 4: Repairing");
-  
+
   if (!p1 && !p2 && !p3 && !p4) return "";
-  
+
   let active = 1;
   if (p4) active = 4;
   else if (p3) active = 3;
   else if (p2) active = 2;
   else if (p1) active = 1;
-  
+
   const steps = [
     { num: 1, label: "Plan", icon: "📝" },
     { num: 2, label: "Execute", icon: "⚡" },
     { num: 3, label: "Review", icon: "🔍" },
     { num: 4, label: "Repair", icon: "🔧" }
   ];
-  
+
   const visibleSteps = p4 ? steps : steps.slice(0, 3);
-  
+
   let html = `<div class="phase-stepper">`;
   visibleSteps.forEach((s, i) => {
     let statusClass = "";
     if (s.num === active) statusClass = "active";
     else if (s.num < active) statusClass = "done";
-    
+
     html += `
       <div class="phase-step ${statusClass}">
         <span class="phase-icon">${s.icon}</span>
@@ -728,7 +728,7 @@ function extractPhaseStepperHtml(text) {
     }
   });
   html += `</div>`;
-  
+
   return html;
 }
 
@@ -996,7 +996,7 @@ function formatResponse(text, isStreaming = false) {
           diffHtml += `<div class="diff-line diff-context">${escapeHtml(l)}</div>`;
         }
       }
-      
+
       const safePath = encodeURIComponent(filename);
       html += `
         <div class="diff-block">
@@ -1016,6 +1016,7 @@ function formatResponse(text, isStreaming = false) {
           <div class="code-header">
             <span>${escapeHtml(lang)}</span>
             <div class="code-actions">
+              <button class="create-file-btn" data-create-file="${safe}">Create File</button>
               <button class="apply-btn" data-apply="${safe}">Apply to Editor</button>
               <button class="copy-btn" data-copy="${safe}">Copy</button>
             </div>
@@ -1270,13 +1271,13 @@ function handleMentionInput(e) {
   const val = e.target.value;
   const pos = e.target.selectionStart;
   const before = val.slice(0, pos);
-  
+
   // Look for last '@' that isn't escaped or inside code (simplified)
   const lastAt = before.lastIndexOf("@");
-  
+
   if (lastAt !== -1 && (lastAt === 0 || /\s/.test(before[lastAt - 1]))) {
     const query = before.slice(lastAt + 1).toLowerCase();
-    
+
     // Lazy-load files if list is empty when user types @
     if (state.workspaceFiles.length === 0) {
       loadFiles().then(() => {
@@ -1284,7 +1285,7 @@ function handleMentionInput(e) {
       });
       return;
     }
-    
+
     // Deactivate if there's a space after the @ (e.g. user finished typing or just typing email-like thing)
     if (query.includes(" ")) {
       state.mention.active = false;
@@ -1458,6 +1459,16 @@ document.addEventListener("click", async (e) => {
     return;
   }
 
+  const createFileBtn = e.target.closest("[data-create-file]");
+  if (createFileBtn) {
+    const code = decodeURIComponent(createFileBtn.dataset.createFile);
+    vscode.postMessage({
+      type: "createFile",
+      payload: { code }
+    });
+    return;
+  }
+
   const applyBtn = e.target.closest("[data-apply]");
   if (applyBtn) {
     const code = decodeURIComponent(applyBtn.dataset.apply);
@@ -1549,7 +1560,7 @@ window.addEventListener("message", (e) => {
   if (type === "createChat") createChat("", true);
   if (type === "setWorkspace") {
     window.__WORKSPACE_PATH__ = path;
-    requestExtension("setWorkspace", { workspace: path }).then(() => loadFiles()).catch(() => {});
+    requestExtension("setWorkspace", { workspace: path }).then(() => loadFiles()).catch(() => { });
   }
 });
 
@@ -1565,7 +1576,7 @@ if (elements.micBtn) {
     try {
       console.log("🎤 Voice: Requesting backend start...");
       const data = await requestExtension("startVoice", {}, 5000);
-      
+
       if (data.status === "started") {
         voiceState.isRecording = true;
         elements.micBtn.classList.add("recording");
@@ -1586,7 +1597,7 @@ if (elements.micBtn) {
   const stopRecordingAction = async () => {
     if (!voiceState.isRecording) return;
     voiceState.isRecording = false;
-    
+
     // UI immediate reset
     elements.micBtn.classList.remove("recording");
     elements.input.classList.remove("listening");
@@ -1620,12 +1631,12 @@ if (elements.micBtn) {
   elements.micBtn.addEventListener("mouseleave", () => {
     if (voiceState.isRecording) stopRecordingAction();
   });
-  
+
   elements.micBtn.addEventListener("touchstart", (e) => {
     e.preventDefault();
     startRecording();
   }, { passive: false });
-  
+
   elements.micBtn.addEventListener("touchend", (e) => {
     e.preventDefault();
     stopRecordingAction();
@@ -1655,7 +1666,7 @@ function renderJournalList(tasks) {
     elements.journalList.innerHTML = `<div class="empty-state">No tasks recorded yet.</div>`;
     return;
   }
-  
+
   elements.journalList.innerHTML = tasks.map(task => {
     const time = new Date(task.timestamp * 1000).toLocaleString();
     const durationStr = task.duration ? ` • ${task.duration}s` : '';
@@ -1677,10 +1688,10 @@ function renderJournalList(tasks) {
 async function fetchAndShowTaskDetail(id) {
   elements.journalDetailContent.innerHTML = `<div class="typing-dots" style="margin:20px;"><span></span><span></span><span></span></div>`;
   elements.journalDetailView.classList.add("open");
-  
+
   try {
     const task = await requestExtension("getJournalTask", { id }, 5000);
-    
+
     let html = `
       <div class="journal-section-title">Request</div>
       <div class="journal-data-box" style="white-space: pre-wrap;">${escapeHtml(task.request)}</div>
@@ -1692,7 +1703,7 @@ async function fetchAndShowTaskDetail(id) {
         <span>Duration: ${task.duration}s</span>
       </div>
     `;
-    
+
     if (task.files_changed?.length) {
       html += `
         <div class="journal-section-title">Files Changed</div>
@@ -1701,7 +1712,7 @@ async function fetchAndShowTaskDetail(id) {
         </div>
       `;
     }
-    
+
     if (task.failures?.length) {
       html += `<div class="journal-section-title" style="color: #f87171;">Failures / Fixes</div>`;
       task.failures.forEach(f => {
@@ -1713,19 +1724,19 @@ async function fetchAndShowTaskDetail(id) {
         `;
       });
     }
-    
+
     if (task.steps?.length) {
       html += `<div class="journal-section-title">Execution Steps (${task.steps.length})</div>`;
       task.steps.forEach((step, i) => {
         html += `
           <div class="journal-data-box" style="margin-bottom: 8px;">
-            <strong style="color:var(--accent)">Step ${i+1}:</strong> ${escapeHtml(step.action)}
+            <strong style="color:var(--accent)">Step ${i + 1}:</strong> ${escapeHtml(step.action)}
             <div style="opacity:0.7; margin-top:4px;">${escapeHtml(step.target)}</div>
           </div>
         `;
       });
     }
-    
+
     elements.journalDetailContent.innerHTML = html;
   } catch (err) {
     elements.journalDetailContent.innerHTML = `<div class="empty-state">Failed to load details.</div>`;
@@ -1771,7 +1782,7 @@ async function init() {
 
   // 3. Notify extension
   vscode.postMessage({ type: "ready" });
-  
+
   // 4. Secondary sync
   // 4. Secondary sync with retries for backend startup
   let attempts = 0;
