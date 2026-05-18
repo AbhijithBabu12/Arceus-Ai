@@ -1,0 +1,92 @@
+{
+  "name": "arceus",
+  "displayName": "Arceus",
+  "description": "Local AI coding assistant powered by Ollama",
+  "version": "0.1.1",
+  "publisher": "arceus-ai",
+  "icon": "media/arceus.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "main": "./extension.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AbhijithBabu12/Arceus-Ai"
+  },
+  "scripts": {
+    "check": "node --check extension.js && node --check media/media.js"
+  },
+  "activationEvents": [
+    "onView:local-ai-assistant.view",
+    "onCommand:local-ai-assistant.newChat",
+    "onCommand:local-ai-assistant.expand"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "Arceus",
+      "properties": {
+        "arceus.ollamaBaseUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:11434",
+          "description": "Base URL for the local Ollama server."
+        },
+        "arceus.defaultModel": {
+          "type": "string",
+          "default": "qwen2.5-coder:1.5b",
+          "description": "Default Ollama model Arceus uses when starting a new chat."
+        },
+        "arceus.keepAlive": {
+          "type": "string",
+          "default": "10m",
+          "description": "How long Ollama should keep the selected model loaded after a chat request. Examples: 5m, 10m, 30m."
+        },
+        "arceus.numCtx": {
+          "type": "number",
+          "default": 4096,
+          "minimum": 1024,
+          "description": "Ollama context window size to request for chat. Larger values need more memory."
+        },
+        "arceus.semanticSearch.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use local Ollama embeddings to add relevant workspace chunks to chat prompts."
+        },
+        "arceus.semanticSearch.embeddingModel": {
+          "type": "string",
+          "default": "nomic-embed-text",
+          "description": "Ollama embedding model used for semantic workspace search. Pull it with: ollama pull nomic-embed-text"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "local-ai-assistant.newChat",
+        "title": "Arceus: New Chat",
+        "icon": "$(add)"
+      },
+      {
+        "command": "local-ai-assistant.expand",
+        "title": "Arceus: Open in Editor",
+        "icon": "$(screen-full)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "local-ai-assistant",
+          "title": "Arceus",
+          "icon": "media/arceus2.png"
+        }
+      ]
+    },
+    "views": {
+      "local-ai-assistant": [
+        {
+          "type": "webview",
+          "id": "local-ai-assistant.view",
+          "name": "Arceus"
+        }
+      ]
+    }
+  }
+}
