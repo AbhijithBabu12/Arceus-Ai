@@ -1030,13 +1030,13 @@ ${message}
         });
     }
 
-    // Expand: open Arceus in a full-width editor tab
+    // Expand: open Arceus in a split editor tab beside the current editor (right side)
     context.subscriptions.push(
         vscode.commands.registerCommand("local-ai-assistant.expand", () => {
             const panel = vscode.window.createWebviewPanel(
                 "local-ai-assistant.editor",
                 "Arceus",
-                vscode.ViewColumn.One,
+                vscode.ViewColumn.Beside,
                 {
                     enableScripts: true,
                     retainContextWhenHidden: true,
