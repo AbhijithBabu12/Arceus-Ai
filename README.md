@@ -7,6 +7,9 @@ With a beautiful interface inspired by modern AI tools, Arceus streams responses
 ## ✨ Key Features
 
 - **100% Local & Private:** Your code never leaves your machine. No internet connection required after downloading models. No API keys or subscriptions needed.
+- **Frontend & App Building:** Ask Arceus to write entire frontends, construct UI components, or design complex algorithms from scratch.
+- **Assisted Debugging:** Set the mode to **Debug** to let the assistant inspect error messages, pinpoint root causes, and outline a step-by-step resolution path.
+- **One-Click Code Insertion:** Instantly insert or apply generated code blocks directly into your active editor or text selection with a single click.
 - **Context-Aware Coding:** Arceus automatically reads your currently active file so it always knows what you're working on.
 - **Workspace Semantic Search:** Automatically indexes your workspace using local embeddings (`nomic-embed-text`) to pull in relevant context from across your entire project when you ask a question.
 - **Smart File Mentions:** Type `@` in the chat input to search and manually attach specific workspace files to your prompt.
