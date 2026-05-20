@@ -958,7 +958,43 @@ function scrollConversation(force = false) {
   }
 }
 
-/* ── Formatting ──────────────────────────────── */
+// Extracts filename from a code block's first comment line.
+// Supports: # filename: x, // filename: x, <!-- filename: x -->, CSS comment filename
+// Returns { fileName, cleanCode } or null.
+function extractFilenameFromCode(codeText) {
+  const lines = codeText.split("\n");
+  if (lines.length === 0) return null;
+
+  const first = lines[0].trim();
+
+  // # filename: path/to/file.ext
+  // // filename: path/to/file.ext
+  // /* filename: path/to/file.ext */
+  // <!-- filename: path/to/file.ext -->
+  const patterns = [
+    /^#\s*filename:\s*(.+)$/i,
+    /^\/\/\s*filename:\s*(.+)$/i,
+    /^\/\*\s*filename:\s*(.+?)\s*\*\/$/i,
+    /^<!--\s*filename:\s*(.+?)\s*-->$/i,
+    /^#\s*filepath:\s*(.+)$/i,
+    /^\/\/\s*filepath:\s*(.+)$/i,
+    /^\/\*\s*filepath:\s*(.+?)\s*\*\/$/i,
+    /^<!--\s*filepath:\s*(.+?)\s*-->$/i,
+  ];
+
+  for (const rx of patterns) {
+    const m = first.match(rx);
+    if (m) {
+      const fileName = m[1].trim();
+      // Validate: must look like a real file path (has extension)
+      if (fileName && /\.[a-zA-Z0-9]+$/.test(fileName)) {
+        const cleanCode = lines.slice(1).join("\n");
+        return { fileName, cleanCode };
+      }
+    }
+  }
+  return null;
+}
 function formatResponse(text, isStreaming = false) {
   const parts = text.split(/```/);
   let html = "";
@@ -1010,13 +1046,15 @@ function formatResponse(text, isStreaming = false) {
           <div class="diff-content">${diffHtml}</div>
         </div>`;
     } else {
+      const extracted = extractFilenameFromCode(code);
+      const btnLabel = extracted ? `Create ${extracted.fileName}` : "Create File";
       const safe = encodeURIComponent(code);
       html += `
         <div class="code-container">
           <div class="code-header">
             <span>${escapeHtml(lang)}</span>
             <div class="code-actions">
-              <button class="create-file-btn" data-create-file="${safe}">Create File</button>
+              <button class="create-file-btn" data-create-file="${safe}">${escapeHtml(btnLabel)}</button>
               <button class="apply-btn" data-apply="${safe}">Apply to Editor</button>
               <button class="copy-btn" data-copy="${safe}">Copy</button>
             </div>
@@ -1233,6 +1271,45 @@ async function sendRequest() {
     render();
     scrollConversation(true);
     focusInput();
+
+    // Auto-create files if Trust mode is on
+    if (elements.trustModeCheckbox.checked) {
+      autoCreateFromResponse(asstMsg.content);
+    }
+  }
+}
+
+/**
+ * Parses the completed AI response for code blocks with filename comments.
+ * If Trust mode is on, sends them to the extension host for automatic creation.
+ */
+function autoCreateFromResponse(responseText) {
+  if (!responseText) return;
+
+  const parts = responseText.split(/```/);
+  const blocks = [];
+
+  for (let i = 1; i < parts.length; i += 2) {
+    const segment = parts[i];
+    if (!segment) continue;
+    const lines = segment.split("\n");
+    const code = lines.slice(1).join("\n").trimEnd();
+    if (!code) continue;
+
+    const extracted = extractFilenameFromCode(code);
+    if (extracted && extracted.fileName && extracted.cleanCode) {
+      blocks.push({
+        fileName: extracted.fileName,
+        code: extracted.cleanCode
+      });
+    }
+  }
+
+  if (blocks.length > 0) {
+    vscode.postMessage({
+      type: "autoCreateFiles",
+      payload: { blocks }
+    });
   }
 }
 
@@ -1461,10 +1538,14 @@ document.addEventListener("click", async (e) => {
 
   const createFileBtn = e.target.closest("[data-create-file]");
   if (createFileBtn) {
-    const code = decodeURIComponent(createFileBtn.dataset.createFile);
+    const rawCode = decodeURIComponent(createFileBtn.dataset.createFile);
+    const extracted = extractFilenameFromCode(rawCode);
     vscode.postMessage({
       type: "createFile",
-      payload: { code }
+      payload: {
+        code: extracted ? extracted.cleanCode : rawCode,
+        defaultName: extracted ? extracted.fileName : ""
+      }
     });
     return;
   }
@@ -1561,6 +1642,16 @@ window.addEventListener("message", (e) => {
   if (type === "setWorkspace") {
     window.__WORKSPACE_PATH__ = path;
     requestExtension("setWorkspace", { workspace: path }).then(() => loadFiles()).catch(() => { });
+  }
+  if (type === "filesChanged") {
+    // Live update workspace files list for @ mentions
+    if (Array.isArray(payload?.files)) {
+      state.workspaceFiles = payload.files;
+    }
+  }
+  if (type === "filesCreated") {
+    // Refresh file list after auto-creation
+    loadFiles();
   }
 });
 

@@ -338,6 +338,13 @@ function buildSystemPrompt(mode, activeFile, semanticContext = "") {
         "You are Arceus, a local AI coding assistant inside VS Code.",
         "Be concise, practical, and honest. Prefer complete code when implementation is asked.",
         "Do not claim you edited files unless a tool or VS Code action actually did it.",
+        "CRITICAL FILE CREATION RULE: When the user asks you to create, write, or generate a file, you MUST start the VERY FIRST LINE of every code block with a comment indicating the file path, using the format appropriate for the language:",
+        "  - Python/Shell/YAML: # filename: path/to/file.ext",
+        "  - JS/TS/Java/C/Go/Rust: // filename: path/to/file.ext",
+        "  - HTML/XML: <!-- filename: path/to/file.html -->",
+        "  - CSS: /* filename: path/to/style.css */",
+        "This filename comment MUST be the very first line in the code block. The rest of the code follows after it.",
+        "When creating multiple files, use separate code blocks for each file, each starting with the filename comment.",
         modeHint,
         semanticContext ? `\nRelevant workspace context from semantic search:\n${semanticContext}` : "",
         fileContext
@@ -414,7 +421,10 @@ function activate(context) {
                         await this.applyCode(message.payload?.code || "");
                         break;
                     case "createFile":
-                        await this.createFileFromCode(message.payload?.code || "");
+                        await this.createFileFromCode(message.payload?.code || "", message.payload?.defaultName || "");
+                        break;
+                    case "autoCreateFiles":
+                        await this.autoCreateFiles(webview, message.payload?.blocks || []);
                         break;
                     case "listModels":
                         await this.handleListModels(webview, message.requestId);
@@ -503,10 +513,11 @@ function activate(context) {
             }
         }
 
-        async createFileFromCode(code) {
+        async createFileFromCode(code, defaultName = "") {
             const fileName = await vscode.window.showInputBox({
                 prompt: "Enter the relative path/filename to create (e.g. src/index.js)",
                 placeHolder: "index.js",
+                value: defaultName,
                 ignoreFocusOut: true
             });
 
@@ -515,29 +526,61 @@ function activate(context) {
             }
 
             try {
-                const rootPath = getWorkspaceRoot();
-                if (!rootPath) {
-                    throw new Error("No open workspace found. Please open a folder in VS Code first.");
-                }
-
-                const fullPath = path.join(rootPath, fileName.trim());
-
-                if (!isInsideWorkspace(fullPath)) {
-                    throw new Error("Cannot create files outside the active workspace.");
-                }
-
-                const dir = path.dirname(fullPath);
-                if (!fs.existsSync(dir)) {
-                    fs.mkdirSync(dir, { recursive: true });
-                }
-
-                fs.writeFileSync(fullPath, code, "utf8");
-
-                const doc = await vscode.workspace.openTextDocument(fullPath);
-                await vscode.window.showTextDocument(doc);
-                vscode.window.showInformationMessage(`Successfully created ${fileName}`);
+                await this.writeFileToWorkspace(fileName.trim(), code);
             } catch (error) {
                 vscode.window.showErrorMessage(`Failed to create file: ${error.message}`);
+            }
+        }
+
+        async writeFileToWorkspace(fileName, code) {
+            const rootPath = getWorkspaceRoot();
+            if (!rootPath) {
+                throw new Error("No open workspace found. Please open a folder in VS Code first.");
+            }
+
+            const fullPath = path.join(rootPath, fileName);
+
+            if (!isInsideWorkspace(fullPath)) {
+                throw new Error("Cannot create files outside the active workspace.");
+            }
+
+            const dir = path.dirname(fullPath);
+            if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir, { recursive: true });
+            }
+
+            fs.writeFileSync(fullPath, code, "utf8");
+
+            const doc = await vscode.workspace.openTextDocument(fullPath);
+            await vscode.window.showTextDocument(doc);
+            vscode.window.showInformationMessage(`✅ Created ${fileName}`);
+        }
+
+        async autoCreateFiles(webview, blocks) {
+            if (!Array.isArray(blocks) || blocks.length === 0) {
+                return;
+            }
+
+            const created = [];
+            for (const block of blocks) {
+                const { fileName, code } = block;
+                if (!fileName || !code) {
+                    continue;
+                }
+
+                try {
+                    await this.writeFileToWorkspace(fileName, code);
+                    created.push(fileName);
+                } catch (error) {
+                    vscode.window.showWarningMessage(`Failed to create ${fileName}: ${error.message}`);
+                }
+            }
+
+            if (created.length > 0) {
+                webview.postMessage({
+                    type: "filesCreated",
+                    payload: { files: created }
+                });
             }
         }
 
@@ -847,6 +890,13 @@ function activate(context) {
             }
         }
 
+        notifyFilesChanged(webview) {
+            try {
+                const files = listWorkspaceFiles();
+                webview?.postMessage({ type: "filesChanged", payload: { files } });
+            } catch { /* ignore */ }
+        }
+
         resolveWebviewView(webviewView) {
             this.view = webviewView;
 
@@ -1104,6 +1154,20 @@ ${message}
             }
         });
     }
+
+    // File watcher: push live file list updates to the webview
+    // so @ mentions always reflect the current workspace state
+    let fileWatchDebounce = null;
+    const watcher = vscode.workspace.createFileSystemWatcher("**/*");
+    const notifyChange = () => {
+        clearTimeout(fileWatchDebounce);
+        fileWatchDebounce = setTimeout(() => {
+            provider.notifyFilesChanged(provider.view?.webview);
+        }, 500);
+    };
+    watcher.onDidCreate(notifyChange);
+    watcher.onDidDelete(notifyChange);
+    context.subscriptions.push(watcher);
 }
 
 function deactivate() {}
