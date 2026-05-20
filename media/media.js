@@ -959,38 +959,74 @@ function scrollConversation(force = false) {
 }
 
 // Extracts filename from a code block's first comment line.
-// Supports: # filename: x, // filename: x, <!-- filename: x -->, CSS comment filename
+// Handles many real-world model output patterns including:
+//   # filename: x, // filename: x, # file: x, # x.py, # x.py:1, etc.
 // Returns { fileName, cleanCode } or null.
 function extractFilenameFromCode(codeText) {
   const lines = codeText.split("\n");
   if (lines.length === 0) return null;
 
   const first = lines[0].trim();
+  const FILE_EXT = /\.[a-zA-Z0-9]{1,10}$/;
 
-  // # filename: path/to/file.ext
-  // // filename: path/to/file.ext
-  // /* filename: path/to/file.ext */
-  // <!-- filename: path/to/file.ext -->
-  const patterns = [
-    /^#\s*filename:\s*(.+)$/i,
-    /^\/\/\s*filename:\s*(.+)$/i,
-    /^\/\*\s*filename:\s*(.+?)\s*\*\/$/i,
-    /^<!--\s*filename:\s*(.+?)\s*-->$/i,
-    /^#\s*filepath:\s*(.+)$/i,
-    /^\/\/\s*filepath:\s*(.+)$/i,
-    /^\/\*\s*filepath:\s*(.+?)\s*\*\/$/i,
-    /^<!--\s*filepath:\s*(.+?)\s*-->$/i,
+  // Strip trailing line numbers like ":1" or ": 1"
+  function cleanName(raw) {
+    return raw.trim().replace(/:\s*\d+\s*$/, "").trim();
+  }
+
+  // Validate: must look like a real file path (has extension, no spaces in name)
+  function isValid(name) {
+    return name && FILE_EXT.test(name) && !/\s/.test(name) && name.length < 200;
+  }
+
+  // 1) Explicit keyword patterns: # filename: x, // file: x, etc.
+  const keywordPatterns = [
+    /^#\s*(?:filename|filepath|file)\s*:\s*(.+)$/i,
+    /^\/\/\s*(?:filename|filepath|file)\s*:\s*(.+)$/i,
+    /^\/\*\s*(?:filename|filepath|file)\s*:\s*(.+?)\s*\*\/$/i,
+    /^<!--\s*(?:filename|filepath|file)\s*:\s*(.+?)\s*-->$/i,
   ];
 
-  for (const rx of patterns) {
+  for (const rx of keywordPatterns) {
     const m = first.match(rx);
     if (m) {
-      const fileName = m[1].trim();
-      // Validate: must look like a real file path (has extension)
-      if (fileName && /\.[a-zA-Z0-9]+$/.test(fileName)) {
-        const cleanCode = lines.slice(1).join("\n");
-        return { fileName, cleanCode };
+      const name = cleanName(m[1]);
+      if (isValid(name)) {
+        return { fileName: name, cleanCode: lines.slice(1).join("\n") };
       }
+    }
+  }
+
+  // 2) Bare filename as comment: # hello.py, // app.js, /* style.css */, <!-- index.html -->
+  const barePatterns = [
+    /^#\s*(.+)$/,
+    /^\/\/\s*(.+)$/,
+    /^\/\*\s*(.+?)\s*\*\/$/,
+    /^<!--\s*(.+?)\s*-->$/,
+  ];
+
+  for (const rx of barePatterns) {
+    const m = first.match(rx);
+    if (m) {
+      const name = cleanName(m[1]);
+      if (isValid(name)) {
+        return { fileName: name, cleanCode: lines.slice(1).join("\n") };
+      }
+    }
+  }
+
+  return null;
+}
+
+// Tries to extract a filename from the code fence language line.
+// e.g., "python fibonacci.py" -> "fibonacci.py"
+function extractFilenameFromLang(lang) {
+  if (!lang) return null;
+  const parts = lang.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    const candidate = parts.slice(1).join("").trim();
+    if (candidate && /\.[a-zA-Z0-9]{1,10}$/.test(candidate) && !/\s/.test(candidate)) {
+      return candidate;
     }
   }
   return null;
@@ -1047,7 +1083,9 @@ function formatResponse(text, isStreaming = false) {
         </div>`;
     } else {
       const extracted = extractFilenameFromCode(code);
-      const btnLabel = extracted ? `Create ${extracted.fileName}` : "Create File";
+      const langFileName = !extracted ? extractFilenameFromLang(lang) : null;
+      const detectedName = extracted?.fileName || langFileName || null;
+      const btnLabel = detectedName ? `Create ${detectedName}` : "Create File";
       const safe = encodeURIComponent(code);
       html += `
         <div class="code-container">
@@ -1293,6 +1331,7 @@ function autoCreateFromResponse(responseText) {
     const segment = parts[i];
     if (!segment) continue;
     const lines = segment.split("\n");
+    const lang = (lines[0] || "").trim();
     const code = lines.slice(1).join("\n").trimEnd();
     if (!code) continue;
 
@@ -1302,6 +1341,12 @@ function autoCreateFromResponse(responseText) {
         fileName: extracted.fileName,
         code: extracted.cleanCode
       });
+    } else {
+      // Fallback: try to get filename from the language line
+      const langName = extractFilenameFromLang(lang);
+      if (langName) {
+        blocks.push({ fileName: langName, code });
+      }
     }
   }
 
