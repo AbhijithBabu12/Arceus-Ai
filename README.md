@@ -38,7 +38,9 @@ In the era of cloud-hosted AI copilots, developers face high subscription costs,
 Arceus is not just a standard chatbot; it is a fully integrated IDE environment designed to build, explain, review, and debug complete applications:
 
 ### 🛠️ 1. Writing Entire Files & Full Frontends from Scratch
-* **Recursive Folder & File Creation:** Ask Arceus to write a complete application or frontend component. Clicking the native **"Create File"** button automatically resolves the path (e.g. `src/components/Navbar.jsx`), recursively creates any missing directories, writes the fully formatted code, and opens it directly in the editor.
+* **Automatic File Creation (Trust Mode):** Enable **Trust** in the composer and simply ask Arceus to create files. It will generate the code, detect the filename automatically, write the file to your workspace, create any missing folders, and open it in your editor — **completely hands-free, zero clicks required.** This is how you build entire frontends in one conversation.
+* **Smart Filename Detection:** Arceus intelligently detects filenames from code comments (`# filename: app.py`, `// app.js`), bare comments (`# hello.py`), and even code fence hints. The **Create File** button shows the detected name (e.g., `Create src/index.js`) and pre-fills it for you.
+* **Code Explanation After Creation:** Every time Arceus creates a file, it automatically explains what the code does, how it works, and how to run it — so you always understand what was generated.
 * **Complete App Bootstrapping:** Generate full HTML, CSS, JavaScript, React, or Python boilerplate files that are syntactically perfect and ready to run.
 
 ### 🔍 2. Workspace-Aware Deep Code Explanations

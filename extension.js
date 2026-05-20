@@ -339,6 +339,7 @@ function buildSystemPrompt(mode, activeFile, semanticContext = "") {
         "Be concise, practical, and honest. Prefer complete code when implementation is asked.",
         "Do not claim you edited files unless a tool or VS Code action actually did it.",
         "FILE RULE: When creating a file, the first line of the code block MUST be a comment with the filename. Example for Python: # filename: hello.py — Example for JS: // filename: app.js — Example for HTML: <!-- filename: index.html -->",
+        "After writing code, ALWAYS provide a brief explanation of what the code does, how it works, and how to run or use it.",
         modeHint,
         semanticContext ? `\nRelevant workspace context from semantic search:\n${semanticContext}` : "",
         fileContext
