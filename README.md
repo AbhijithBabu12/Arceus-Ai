@@ -1,4 +1,7 @@
-# Arceus - Local AI Coding Powerhouse ⚡
+<p align="center">
+  <img src="https://media.tenor.com/N0dqmMlKa8kAAAAi/arceus.gif" width="100"/>
+
+ # ⚡ Arceus - Local AI Coding Powerhouse 
 
 Arceus is a premium, fully local AI coding assistant for VS Code, powered by **Ollama**. Positioned as a private, high-performance alternative to **Cursor**, **Codex**, and **Claude Code**, Arceus brings state-of-the-art AI pair-programming directly into your editor—**100% privately, offline, with zero subscriptions, and no code ever leaving your machine.**
 
