@@ -41,7 +41,7 @@ In the era of cloud-hosted AI copilots, developers face high subscription costs,
 Arceus is not just a standard chatbot; it is a fully integrated IDE environment designed to build, explain, review, and debug complete applications:
 
 ### 🛠️ 1. Writing Entire Files & Full Frontends from Scratch
-* **Automatic File Creation (Trust Mode):** Enable **Trust** in the composer and simply ask Arceus to create files. It will generate the code, detect the filename automatically, write the file to your workspace, create any missing folders, and open it in your editor — **completely hands-free, zero clicks required.** This is how you build entire frontends in one conversation.
+* **Automatic File Creation (Trust Mode):** Enable **Trust** in the composer and simply ask Arceus to create files. Arceus now uses a structured file-generation path, writes the file directly to your workspace, creates any missing folders, refreshes `@` mentions, and opens the file in your editor — **completely hands-free, zero clicks required.**
 * **Smart Filename Detection:** Arceus intelligently detects filenames from code comments (`# filename: app.py`, `// app.js`), bare comments (`# hello.py`), and even code fence hints. The **Create File** button shows the detected name (e.g., `Create src/index.js`) and pre-fills it for you.
 * **Code Explanation After Creation:** Every time Arceus creates a file, it automatically explains what the code does, how it works, and how to run it — so you always understand what was generated.
 * **Complete App Bootstrapping:** Generate full HTML, CSS, JavaScript, React, or Python boilerplate files that are syntactically perfect and ready to run.
@@ -123,6 +123,6 @@ Customize Arceus via VS Code Settings (`Ctrl+,` or `Cmd+,` and search for "Arceu
 ## 🔮 What's Coming Next (Roadmap)
 
 We are actively developing premium additions for upcoming releases:
-* **Fully Autonomous "Trust Mode" Execution:** Allowing Arceus to write files, modify codes, and fix bugs in your workspace completely hands-free as soon as it completes a thought (no button clicks required!).
+* **Multi-step Trust Mode Editing:** Expand the current automatic file creation flow into deeper multi-file edit plans, patch review, and repair loops.
 * **Local Speech-to-Text (STT):** Hold the microphone button to dictate commands directly to your AI pair-programmer.
 * **Multi-File Workspace Refactoring:** Complete agent planning that reads, modifies, and resolves complex bugs across multiple files sequentially.

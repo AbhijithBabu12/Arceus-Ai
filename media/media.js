@@ -1323,6 +1323,7 @@ async function sendRequest() {
  */
 function autoCreateFromResponse(responseText) {
   if (!responseText) return;
+  if (/^Created file:\s*`[^`]+`/m.test(responseText)) return;
 
   const parts = responseText.split(/```/);
   const blocks = [];
@@ -1362,6 +1363,13 @@ async function loadFiles() {
   try {
     const data = await requestExtension("listFiles", {}, 10000);
     state.workspaceFiles = Array.isArray(data.files) ? data.files : [];
+    if (state.mention.active) {
+      state.mention.filtered = state.workspaceFiles
+        .filter(f => f.toLowerCase().includes((state.mention.query || "").toLowerCase()))
+        .slice(0, 100);
+      state.mention.selectedIndex = 0;
+      updateMentionPopup();
+    }
   } catch (err) {
     console.error("Failed to load workspace files", err);
   }
@@ -1400,13 +1408,7 @@ function handleMentionInput(e) {
   if (lastAt !== -1 && (lastAt === 0 || /\s/.test(before[lastAt - 1]))) {
     const query = before.slice(lastAt + 1).toLowerCase();
 
-    // Lazy-load files if list is empty when user types @
-    if (state.workspaceFiles.length === 0) {
-      loadFiles().then(() => {
-        handleMentionInput(e);
-      });
-      return;
-    }
+    loadFiles().catch(() => {});
 
     // Deactivate if there's a space after the @ (e.g. user finished typing or just typing email-like thing)
     if (query.includes(" ")) {
@@ -1692,6 +1694,13 @@ window.addEventListener("message", (e) => {
     // Live update workspace files list for @ mentions
     if (Array.isArray(payload?.files)) {
       state.workspaceFiles = payload.files;
+      if (state.mention.active) {
+        state.mention.filtered = state.workspaceFiles
+          .filter(f => f.toLowerCase().includes((state.mention.query || "").toLowerCase()))
+          .slice(0, 100);
+        state.mention.selectedIndex = 0;
+        updateMentionPopup();
+      }
     }
   }
   if (type === "filesCreated") {

@@ -22,6 +22,82 @@ const IGNORED_DIRS = new Set([
     ".next", ".turbo", "coverage", ".venv", "venv", "env"
 ]);
 
+function escapeRegExp(text) {
+    return String(text).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function extractMentions(text) {
+    return [...String(text || "").matchAll(/@([^\s@]+)/g)]
+        .map((match) => match[1].trim().replace(/[),.;:!?]+$/, ""))
+        .filter(Boolean);
+}
+
+function extensionToLanguage(filePath) {
+    const ext = path.extname(filePath || "").toLowerCase();
+    return {
+        ".py": "python",
+        ".js": "javascript",
+        ".ts": "typescript",
+        ".tsx": "tsx",
+        ".jsx": "jsx",
+        ".html": "html",
+        ".css": "css",
+        ".json": "json",
+        ".md": "markdown",
+        ".java": "java",
+        ".c": "c",
+        ".cpp": "cpp",
+        ".go": "go",
+        ".rs": "rust",
+        ".sh": "bash"
+    }[ext] || ext.replace(".", "") || "text";
+}
+
+function resolveWorkspaceFile(relativePath) {
+    const root = getWorkspaceRoot();
+    if (!root || !relativePath) {
+        return null;
+    }
+
+    const direct = path.resolve(root, relativePath);
+    if (isInsideWorkspace(direct) && fs.existsSync(direct) && fs.statSync(direct).isFile()) {
+        return direct;
+    }
+
+    const normalized = relativePath.replace(/\\/g, "/").toLowerCase();
+    const byRelativePath = listWorkspaceFiles().find((file) => file.toLowerCase() === normalized);
+    if (byRelativePath) {
+        return path.resolve(root, byRelativePath);
+    }
+
+    const byName = listWorkspaceFiles().find((file) => path.basename(file).toLowerCase() === normalized);
+    return byName ? path.resolve(root, byName) : null;
+}
+
+function buildMentionContext(input) {
+    const mentions = extractMentions(input);
+    if (!mentions.length) {
+        return "";
+    }
+
+    const chunks = [];
+    for (const mention of mentions) {
+        const fullPath = resolveWorkspaceFile(mention);
+        if (!fullPath) {
+            chunks.push(`\nMentioned file @${mention} was not found in the current workspace.`);
+            continue;
+        }
+
+        const root = getWorkspaceRoot();
+        const relative = path.relative(root, fullPath).replace(/\\/g, "/");
+        const language = extensionToLanguage(relative);
+        const content = fs.readFileSync(fullPath, "utf8").slice(0, 20000);
+        chunks.push(`\nExact content of @${relative}:\n\`\`\`${language}\n${content}\n\`\`\``);
+    }
+
+    return chunks.join("\n");
+}
+
 function getDefaultState() {
     return {
         chats: [],
@@ -320,7 +396,7 @@ async function embedTexts(model, inputs) {
     return Array.isArray(data.embeddings) ? data.embeddings.map(normalizeVector) : [];
 }
 
-function buildSystemPrompt(mode, activeFile, semanticContext = "") {
+function buildSystemPrompt(mode, activeFile, semanticContext = "", mentionContext = "") {
     const modeHint = {
         auto: "Infer whether the user needs building, debugging, reviewing, explaining, or normal chat. Adapt your answer to that task.",
         build: "Build mode: focus on implementation. Give concrete steps, file-level guidance, and complete code when useful. Prefer practical patches over broad discussion.",
@@ -341,6 +417,7 @@ function buildSystemPrompt(mode, activeFile, semanticContext = "") {
         "FILE RULE: When creating a file, the first line of the code block MUST be a comment with the filename. Example for Python: # filename: hello.py — Example for JS: // filename: app.js — Example for HTML: <!-- filename: index.html -->",
         "After writing code, ALWAYS provide a brief explanation of what the code does, how it works, and how to run or use it.",
         modeHint,
+        mentionContext ? `\nMentioned file context. Use this exact content for @file questions and prioritize it over chat history:\n${mentionContext}` : "",
         semanticContext ? `\nRelevant workspace context from semantic search:\n${semanticContext}` : "",
         fileContext
     ].filter(Boolean).join("\n");
@@ -348,14 +425,48 @@ function buildSystemPrompt(mode, activeFile, semanticContext = "") {
 
 function buildOllamaMessages(payload) {
     const messages = Array.isArray(payload.messages) ? payload.messages : [];
+    const mentionContext = buildMentionContext(payload.input || "");
+    const hasMentions = extractMentions(payload.input || "").length > 0;
     const trimmed = messages
         .filter((message) => ["user", "assistant"].includes(message.role) && typeof message.content === "string")
-        .slice(-MAX_HISTORY_MESSAGES);
+        .slice(hasMentions ? -1 : -MAX_HISTORY_MESSAGES);
 
     return [
-        { role: "system", content: buildSystemPrompt(payload.mode, payload.active_file, payload.semantic_context) },
+        { role: "system", content: buildSystemPrompt(payload.mode, payload.active_file, payload.semantic_context, mentionContext) },
         ...trimmed
     ];
+}
+
+function wantsAutomaticFileCreation(payload = {}) {
+    if (payload.trust_mode === false) {
+        return false;
+    }
+
+    const mode = String(payload.mode || "auto").toLowerCase();
+    if (mode === "chat" || mode === "explain" || mode === "review") {
+        return false;
+    }
+
+    const text = String(payload.input || "").toLowerCase();
+    return /\b(create|make|write|generate|build|implement)\b/.test(text)
+        && /\b(file|code|script|program|app|website|frontend|backend|[\w.-]+\.(py|js|ts|tsx|jsx|html|css|json|md|txt|csv|java|c|cpp|go|rs|sh))\b/.test(text);
+}
+
+function extractJsonObject(text) {
+    const raw = String(text || "").trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+    try {
+        return JSON.parse(raw);
+    } catch {
+        const match = raw.match(/\{[\s\S]*\}/);
+        if (!match) {
+            return null;
+        }
+        try {
+            return JSON.parse(match[0]);
+        } catch {
+            return null;
+        }
+    }
 }
 
 function activate(context) {
@@ -533,7 +644,12 @@ function activate(context) {
                 throw new Error("No open workspace found. Please open a folder in VS Code first.");
             }
 
-            const fullPath = path.join(rootPath, fileName);
+            const safeName = String(fileName || "").trim().replace(/^[/\\]+/, "");
+            if (!safeName) {
+                throw new Error("No filename was provided.");
+            }
+
+            const fullPath = path.resolve(rootPath, safeName);
 
             if (!isInsideWorkspace(fullPath)) {
                 throw new Error("Cannot create files outside the active workspace.");
@@ -548,6 +664,8 @@ function activate(context) {
 
             const doc = await vscode.workspace.openTextDocument(fullPath);
             await vscode.window.showTextDocument(doc);
+            this.notifyFilesChanged(this.view?.webview);
+            return safeName;
             vscode.window.showInformationMessage(`✅ Created ${fileName}`);
         }
 
@@ -576,6 +694,90 @@ function activate(context) {
                     type: "filesCreated",
                     payload: { files: created }
                 });
+            }
+        }
+
+        async handleAutomaticFileCreation(webview, requestId, payload) {
+            const controller = new AbortController();
+            activeRequests.set(requestId, controller);
+
+            try {
+                const response = await fetch(`${getOllamaBaseUrl()}/api/chat`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        model: payload.model || getDefaultModel(),
+                        messages: [
+                            {
+                                role: "system",
+                                content: [
+                                    "You are Arceus creating files inside a VS Code workspace.",
+                                    "Return ONLY valid JSON. No markdown, no prose.",
+                                    "Schema: {\"files\":[{\"path\":\"relative/path.ext\",\"content\":\"full file content\"}],\"summary\":\"one short sentence\",\"run\":\"optional command\"}.",
+                                    "Pick a clear filename if the user did not provide one. Use snake_case for Python filenames.",
+                                    "Content must be complete runnable code. Do not include filename labels outside the file content."
+                                ].join("\n")
+                            },
+                            { role: "user", content: payload.input || "" }
+                        ],
+                        stream: false,
+                        keep_alive: getKeepAlive(),
+                        options: { num_ctx: getNumCtx() }
+                    }),
+                    signal: controller.signal
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Ollama returned ${response.status}. Make sure Ollama is running and the model is pulled.`);
+                }
+
+                const data = await response.json();
+                const parsed = extractJsonObject(data?.message?.content || "");
+                const files = Array.isArray(parsed?.files) ? parsed.files : [];
+                if (!files.length) {
+                    throw new Error("The model did not return a valid file payload. Try again with a specific filename.");
+                }
+
+                const created = [];
+                for (const file of files) {
+                    const filePath = String(file.path || "").trim();
+                    const content = String(file.content || "");
+                    if (!filePath || !content.trim()) {
+                        continue;
+                    }
+                    const createdPath = await this.writeFileToWorkspace(filePath, content);
+                    created.push({ path: createdPath, content });
+                }
+
+                if (!created.length) {
+                    throw new Error("No valid files were produced.");
+                }
+
+                const first = created[0];
+                const language = extensionToLanguage(first.path);
+                const summary = parsed?.summary || `Created ${created.map((file) => `\`${file.path}\``).join(", ")}.`;
+                const run = parsed?.run ? `\n\nRun it with: \`${parsed.run}\`` : "";
+                const text = [
+                    summary,
+                    "",
+                    `Created file: \`${first.path}\``,
+                    "",
+                    `\`\`\`${language} ${first.path}`,
+                    first.content,
+                    "```",
+                    run
+                ].join("\n");
+
+                webview.postMessage({ type: "askChunk", requestId, payload: { text } });
+                webview.postMessage({ type: "filesCreated", payload: { files: created.map((file) => file.path) } });
+                webview.postMessage({ type: "askDone", requestId, payload: { ok: true } });
+            } catch (error) {
+                const message = error?.name === "AbortError"
+                    ? "Request stopped."
+                    : String(error?.message || error || "Automatic file creation failed");
+                webview.postMessage({ type: "askError", requestId, payload: { message } });
+            } finally {
+                activeRequests.delete(requestId);
             }
         }
 
@@ -802,6 +1004,11 @@ function activate(context) {
         }
 
         async handleAskOllama(webview, requestId, payload) {
+            if (wantsAutomaticFileCreation(payload)) {
+                await this.handleAutomaticFileCreation(webview, requestId, payload);
+                return;
+            }
+
             const controller = new AbortController();
             activeRequests.set(requestId, controller);
 
