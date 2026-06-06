@@ -1,6 +1,6 @@
 // @ts-nocheck
 const vscode = acquireVsCodeApi();
-const DEFAULT_MODELS = ["qwen2.5-coder:1.5b", "qwen2.5-coder:3b"];
+const DEFAULT_MODELS = [];
 
 /* ── State ──────────────────────────────────── */
 const state = {
@@ -380,13 +380,13 @@ async function loadModels() {
         && !/(embed|embedding|bert)/i.test(model))
       : [];
 
-    state.availableModels = models.length ? models : [...DEFAULT_MODELS];
+    state.availableModels = models;
   } catch {
-    state.availableModels = [...DEFAULT_MODELS];
+    state.availableModels = [];
   }
 
   if (!state.availableModels.includes(state.settings.model)) {
-    state.settings.model = state.availableModels[0] || DEFAULT_MODELS[0];
+    state.settings.model = state.availableModels[0] || "";
     persistState();
   }
 }
@@ -478,6 +478,10 @@ function render() {
 }
 
 function renderModelOptions() {
+  if (state.availableModels.length === 0) {
+    elements.bottomModelSelect.innerHTML = `<option value="" disabled selected>No models found</option>`;
+    return;
+  }
   const optionsHtml = state.availableModels
     .map((model) => `<option value="${escapeHtml(model)}">${escapeHtml(model)}</option>`)
     .join("");
@@ -516,16 +520,22 @@ function positionPickerMenu(shell, menu) {
 function renderCustomPickers() {
   if (!elements.modelPickerMenu || !elements.modePickerMenu) return;
 
-  elements.modelPickerLabel.textContent = state.settings.model;
-  elements.modelPickerMenu.innerHTML = `<div class="picker-title">Model</div>` +
-    state.availableModels.map((model) => `
-      <button class="picker-option${model === state.settings.model ? " active" : ""}" data-pick-model="${escapeHtml(model)}" type="button">
-        <span class="option-name">${escapeHtml(model)}</span>
-      </button>
-    `).join("");
-  const longestModel = state.availableModels.reduce((longest, model) =>
-    model.length > longest.length ? model : longest, state.settings.model || "");
-  elements.modelPickerMenu.style.setProperty("--picker-min-width", `${Math.min(Math.max(190, longestModel.length * 7 + 34), 340)}px`);
+  elements.modelPickerLabel.textContent = state.settings.model || "No model";
+  if (state.availableModels.length === 0) {
+    elements.modelPickerMenu.innerHTML = `<div class="picker-title">Model</div>
+      <div class="picker-empty">No models found. Install models with:<br><code>ollama pull &lt;model&gt;</code></div>`;
+    elements.modelPickerMenu.style.setProperty("--picker-min-width", "220px");
+  } else {
+    elements.modelPickerMenu.innerHTML = `<div class="picker-title">Model</div>` +
+      state.availableModels.map((model) => `
+        <button class="picker-option${model === state.settings.model ? " active" : ""}" data-pick-model="${escapeHtml(model)}" type="button">
+          <span class="option-name">${escapeHtml(model)}</span>
+        </button>
+      `).join("");
+    const longestModel = state.availableModels.reduce((longest, model) =>
+      model.length > longest.length ? model : longest, state.settings.model || "");
+    elements.modelPickerMenu.style.setProperty("--picker-min-width", `${Math.min(Math.max(190, longestModel.length * 7 + 34), 340)}px`);
+  }
 
   const modes = [
     ["auto", "Auto"],
@@ -577,7 +587,7 @@ function renderChatList() {
 const welcomeHtml = `
   <div class="welcome-msg">
     <p class="intro">How can I help you today?</p>
-    <p>Ask me anything — I'll use your local Qwen models to assist.</p>
+    <p>Ask me anything — I'll use your locally installed Ollama models to assist.</p>
   </div>
 `;
 
@@ -1934,7 +1944,7 @@ async function init() {
   const trySecondarySync = async () => {
     await loadModels();
     syncControls();
-    if (state.availableModels.length <= DEFAULT_MODELS.length && attempts < 10) {
+    if (state.availableModels.length === 0 && attempts < 10) {
       attempts++;
       setTimeout(trySecondarySync, 1000);
     }
