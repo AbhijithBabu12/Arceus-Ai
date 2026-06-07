@@ -469,6 +469,69 @@ function extractJsonObject(text) {
     }
 }
 
+function extractFilesFromMarkdown(text, userInput) {
+    const files = [];
+    // Match code blocks: ```lang filename\n...code...\n```
+    // or code blocks with a filename comment on the first line
+    const codeBlockRegex = /```(\w*)\s*([\w./\\-]*)\s*\n([\s\S]*?)```/g;
+    let match;
+
+    while ((match = codeBlockRegex.exec(text)) !== null) {
+        const lang = match[1] || "";
+        let name = (match[2] || "").trim();
+        let code = (match[3] || "").trim();
+        if (!code) continue;
+
+        // Try to extract filename from first-line comment (e.g. # filename: calc.py)
+        if (!name) {
+            const firstLine = code.split("\n")[0];
+            const fnMatch = firstLine.match(/^(?:#|\/\/|<!--|--)\s*filename:\s*(.+?)(?:\s*-->)?\s*$/i);
+            if (fnMatch) {
+                name = fnMatch[1].trim();
+                code = code.split("\n").slice(1).join("\n").trim();
+            }
+        }
+
+        // Infer filename from language and user input if still missing
+        if (!name) {
+            name = inferFileName(lang, userInput);
+        }
+
+        if (name && code) {
+            files.push({ path: name, content: code });
+        }
+    }
+
+    return files;
+}
+
+function inferFileName(lang, userInput) {
+    const extMap = {
+        python: ".py", py: ".py", javascript: ".js", js: ".js",
+        typescript: ".ts", ts: ".ts", html: ".html", css: ".css",
+        java: ".java", c: ".c", cpp: ".cpp", go: ".go",
+        rust: ".rs", sh: ".sh", bash: ".sh", json: ".json",
+        ruby: ".rb", php: ".php", sql: ".sql", xml: ".xml",
+        yaml: ".yaml", yml: ".yaml", toml: ".toml", md: ".md",
+        tsx: ".tsx", jsx: ".jsx", cs: ".cs", kt: ".kt"
+    };
+
+    const ext = extMap[lang.toLowerCase()] || ".py";
+    const input = String(userInput || "").toLowerCase();
+
+    // Try to extract a descriptive name from the user input
+    // Remove trigger words and common filler
+    const cleaned = input
+        .replace(/\b(create|make|write|generate|build|implement|a|an|the|for|me|please|file|code|script|program)\b/g, "")
+        .trim()
+        .replace(/\s+/g, "_")
+        .replace(/[^a-z0-9_]/g, "")
+        .replace(/^_+|_+$/g, "");
+
+    const baseName = cleaned || "main";
+    return `${baseName}${ext}`;
+}
+
 function activate(context) {
     const activeRequests = new Map();
 
@@ -712,10 +775,12 @@ function activate(context) {
                                 role: "system",
                                 content: [
                                     "You are Arceus creating files inside a VS Code workspace.",
-                                    "Return ONLY valid JSON. No markdown, no prose.",
-                                    "Schema: {\"files\":[{\"path\":\"relative/path.ext\",\"content\":\"full file content\"}],\"summary\":\"one short sentence\",\"run\":\"optional command\"}.",
-                                    "Pick a clear filename if the user did not provide one. Use snake_case for Python filenames.",
-                                    "Content must be complete runnable code. Do not include filename labels outside the file content."
+                                    "Return ONLY valid JSON with this exact schema:",
+                                    '{"files":[{"path":"calculator.py","content":"# full code here"}],"summary":"Created calculator","run":"python calculator.py"}',
+                                    "Rules:",
+                                    "- Pick a clear filename. Use snake_case for Python.",
+                                    "- Content must be complete runnable code.",
+                                    "- No markdown fences, no explanation, just the JSON object."
                                 ].join("\n")
                             },
                             { role: "user", content: payload.input || "" }
@@ -732,8 +797,15 @@ function activate(context) {
                 }
 
                 const data = await response.json();
-                const parsed = extractJsonObject(data?.message?.content || "");
-                const files = Array.isArray(parsed?.files) ? parsed.files : [];
+                const rawContent = data?.message?.content || "";
+                const parsed = extractJsonObject(rawContent);
+                let files = Array.isArray(parsed?.files) ? parsed.files : [];
+
+                // Fallback: if JSON parsing failed, extract code blocks from markdown
+                if (!files.length) {
+                    files = extractFilesFromMarkdown(rawContent, payload.input);
+                }
+
                 if (!files.length) {
                     throw new Error("The model did not return a valid file payload. Try again with a specific filename.");
                 }
