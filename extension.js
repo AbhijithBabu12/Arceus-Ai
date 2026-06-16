@@ -452,21 +452,71 @@ function wantsAutomaticFileCreation(payload = {}) {
         && /\b(file|code|script|program|app|website|frontend|backend|[\w.-]+\.(py|js|ts|tsx|jsx|html|css|json|md|txt|csv|java|c|cpp|go|rs|sh))\b/.test(text);
 }
 
+function sanitizeModelJson(text) {
+    // Models often use Python-style triple quotes """ inside JSON.
+    // Replace """...""" with properly escaped JSON strings.
+    let result = text;
+
+    // Handle triple-quoted content: """...""" → "..."
+    result = result.replace(/"""\s*\n([\s\S]*?)"""/g, (_, content) => {
+        // Escape the content for valid JSON
+        const escaped = content
+            .replace(/\\/g, "\\\\")
+            .replace(/"/g, '\\"')
+            .replace(/\n/g, "\\n")
+            .replace(/\r/g, "\\r")
+            .replace(/\t/g, "\\t");
+        return `"${escaped}"`;
+    });
+
+    // Handle single triple-quote at start/end: """content""" on one line
+    result = result.replace(/"""(.*?)"""/g, (_, content) => {
+        const escaped = content
+            .replace(/\\/g, "\\\\")
+            .replace(/"/g, '\\"');
+        return `"${escaped}"`;
+    });
+
+    return result;
+}
+
 function extractJsonObject(text) {
     const raw = String(text || "").trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+
+    // Try direct parse first
     try {
         return JSON.parse(raw);
-    } catch {
-        const match = raw.match(/\{[\s\S]*\}/);
-        if (!match) {
-            return null;
-        }
-        try {
-            return JSON.parse(match[0]);
-        } catch {
-            return null;
-        }
+    } catch { /* continue */ }
+
+    // Try after sanitizing model-specific quirks (triple quotes, etc.)
+    try {
+        return JSON.parse(sanitizeModelJson(raw));
+    } catch { /* continue */ }
+
+    // Try extracting a JSON object from the text
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) {
+        return null;
     }
+
+    try {
+        return JSON.parse(match[0]);
+    } catch { /* continue */ }
+
+    try {
+        return JSON.parse(sanitizeModelJson(match[0]));
+    } catch {
+        return null;
+    }
+}
+
+function looksLikeFileCreationPayload(code) {
+    // Check if a code block's content looks like the JSON file-creation schema
+    // rather than actual file content the user wants
+    return /^\s*\{/.test(code)
+        && /"files"\s*:/.test(code)
+        && /"path"\s*:/.test(code)
+        && /"content"\s*:/.test(code);
 }
 
 function extractFilesFromMarkdown(text, userInput) {
@@ -481,6 +531,23 @@ function extractFilesFromMarkdown(text, userInput) {
         let name = (match[2] || "").trim();
         let code = (match[3] || "").trim();
         if (!code) continue;
+
+        // Skip code blocks that are actually the JSON file-creation payload
+        // (the model wrapped its JSON response in ```json fences)
+        if (looksLikeFileCreationPayload(code)) {
+            // Try to parse it as a file creation payload instead
+            const parsed = extractJsonObject(code);
+            if (Array.isArray(parsed?.files) && parsed.files.length > 0) {
+                for (const file of parsed.files) {
+                    const filePath = String(file.path || "").trim();
+                    const content = String(file.content || "").trim();
+                    if (filePath && content) {
+                        files.push({ path: filePath, content });
+                    }
+                }
+                continue;
+            }
+        }
 
         // Try to extract filename from first-line comment (e.g. # filename: calc.py)
         if (!name) {
@@ -510,19 +577,30 @@ function inferFileName(lang, userInput) {
         python: ".py", py: ".py", javascript: ".js", js: ".js",
         typescript: ".ts", ts: ".ts", html: ".html", css: ".css",
         java: ".java", c: ".c", cpp: ".cpp", go: ".go",
-        rust: ".rs", sh: ".sh", bash: ".sh", json: ".json",
+        rust: ".rs", sh: ".sh", bash: ".sh",
         ruby: ".rb", php: ".php", sql: ".sql", xml: ".xml",
         yaml: ".yaml", yml: ".yaml", toml: ".toml", md: ".md",
         tsx: ".tsx", jsx: ".jsx", cs: ".cs", kt: ".kt"
     };
 
-    const ext = extMap[lang.toLowerCase()] || ".py";
+    // Determine extension from language, but also check user input for hints
     const input = String(userInput || "").toLowerCase();
+    let ext = extMap[lang.toLowerCase()];
+
+    // If no extension from language (or lang is json/empty), try to infer from user input
+    if (!ext || lang.toLowerCase() === "json") {
+        const inputExtMatch = input.match(/\b(python|py|javascript|js|typescript|ts|html|css|java|cpp|go|rust|sh|bash|ruby|php)\b/);
+        if (inputExtMatch) {
+            ext = extMap[inputExtMatch[1]] || ".py";
+        } else {
+            ext = ".py";
+        }
+    }
 
     // Try to extract a descriptive name from the user input
     // Remove trigger words and common filler
     const cleaned = input
-        .replace(/\b(create|make|write|generate|build|implement|a|an|the|for|me|please|file|code|script|program)\b/g, "")
+        .replace(/\b(create|make|write|generate|build|implement|a|an|the|for|me|please|file|code|script|program|python|py|javascript|js|html|css)\b/g, "")
         .trim()
         .replace(/\s+/g, "_")
         .replace(/[^a-z0-9_]/g, "")
